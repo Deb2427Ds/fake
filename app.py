@@ -3,7 +3,7 @@ import streamlit as st
 from transformers import pipeline
 from PIL import Image
 import torch
-import torchvision.transforms as transforms
+from torchvision import models, transforms
 import cv2
 import tempfile
 
@@ -38,27 +38,30 @@ if file:
 
     # ---------------- Image ----------------
     if "image" in file_type:
-        image = Image.open(file)
+        image = Image.open(file).convert("RGB")
         st.image(image, caption="Uploaded Image", use_column_width=True)
 
         st.info("Using pre-trained placeholder deepfake detector (ResNet18)")
 
-        # Preprocess image
-        model = torch.hub.load('pytorch/vision:v0.15.2', 'resnet18', pretrained=True)
-        model.eval()
+        # Preprocess
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225]),
         ])
+
         input_tensor = preprocess(image).unsqueeze(0)
+
+        # Load ResNet18
+        model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+        model.eval()
 
         with torch.no_grad():
             output = model(input_tensor)
             prob = torch.softmax(output, dim=1)
             top1_prob, top1_catid = torch.max(prob, dim=1)
-            # Placeholder prediction
+            # Placeholder: even/odd top1_catid -> FAKE/REAL
             st.write(f"Fake/Real Prediction (placeholder): **{'FAKE' if top1_catid.item()%2==0 else 'REAL'}** | Confidence: {top1_prob.item():.2f}")
 
     # ---------------- Video ----------------
@@ -71,25 +74,30 @@ if file:
 
         ret, frame = cap.read()
         if ret:
+            # Convert to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            st.image(frame_rgb, caption="First frame from video", use_column_width=True)
+            frame_pil = Image.fromarray(frame_rgb).convert("RGB")
+            st.image(frame_pil, caption="First frame from video", use_column_width=True)
 
             st.info("Using pre-trained placeholder deepfake detector (ResNet18) on first frame")
 
-            model = torch.hub.load('pytorch/vision:v0.15.2', 'resnet18', pretrained=True)
-            model.eval()
+            # Preprocess
             preprocess = transforms.Compose([
-                transforms.ToPILImage(),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225]),
             ])
-            input_tensor = preprocess(frame_rgb).unsqueeze(0)
+            input_tensor = preprocess(frame_pil).unsqueeze(0)
+
+            # Load ResNet18
+            model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+            model.eval()
 
             with torch.no_grad():
                 output = model(input_tensor)
                 prob = torch.softmax(output, dim=1)
                 top1_prob, top1_catid = torch.max(prob, dim=1)
                 st.write(f"Fake/Real Prediction (placeholder): **{'FAKE' if top1_catid.item()%2==0 else 'REAL'}** | Confidence: {top1_prob.item():.2f}")
+
         cap.release()
