@@ -1,9 +1,9 @@
 # app.py
 import streamlit as st
-from transformers import pipeline
+import joblib
 from PIL import Image
 import torch
-from torchvision import models, transforms
+from torchvision import transforms
 import cv2
 import tempfile
 
@@ -15,23 +15,19 @@ st.title("📰 Fake News & 🖼 Deepfake Detection Demo")
 # ---------------------------
 st.header("1️⃣ Fake News Detection (Text)")
 
+# Load your trained Fake News model (Scikit-learn / XGBoost / etc.)
+@st.cache_resource
+def load_fake_news_model():
+    return joblib.load("fake_news_model.pkl")  # 👈 put your model path here
+
+fake_news_model = load_fake_news_model()
+
 text_input = st.text_area("Enter text/article for classification:")
 
 if st.button("Check Text"):
     if text_input.strip() != "":
-        # Load a better pre-trained fake news model
-        classifier = pipeline("text-classification", model="roberta-base-finetuned-fake-news")
-        result = classifier(text_input)[0]
-
-        label = result['label']
-        score = result['score']
-
-        # Apply confidence threshold
-        threshold = 0.7
-        if score < threshold:
-            st.write(f"Prediction uncertain (score={score:.2f}), could be REAL or FAKE")
-        else:
-            st.write(f"Label: **{label}** | Confidence: {score:.2f}")
+        prediction = fake_news_model.predict([text_input])[0]
+        st.write(f"Prediction: **{prediction}**")
     else:
         st.warning("Please enter some text to classify.")
 
@@ -39,6 +35,15 @@ if st.button("Check Text"):
 # 2️⃣ Deepfake Detection (Images / Videos)
 # ---------------------------
 st.header("2️⃣ Deepfake Detection (Images / Videos)")
+
+# Load your trained Deepfake Detection model (PyTorch)
+@st.cache_resource
+def load_deepfake_model():
+    model = torch.load("deepfake_detector.pth", map_location="cpu")  # 👈 your model
+    model.eval()
+    return model
+
+deepfake_model = load_deepfake_model()
 
 file = st.file_uploader("Upload image or video", type=["jpg", "png", "mp4", "mov"])
 
@@ -50,25 +55,18 @@ if file:
         image = Image.open(file).convert("RGB")
         st.image(image, caption="Uploaded Image", use_column_width=True)
 
-        st.info("Using pre-trained placeholder deepfake detector (ResNet18)")
-
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225]),
         ])
 
         input_tensor = preprocess(image).unsqueeze(0)
 
-        model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-        model.eval()
-
         with torch.no_grad():
-            output = model(input_tensor)
-            prob = torch.softmax(output, dim=1)
-            top1_prob, top1_catid = torch.max(prob, dim=1)
-            st.write(f"Fake/Real Prediction (placeholder): **{'FAKE' if top1_catid.item()%2==0 else 'REAL'}** | Confidence: {top1_prob.item():.2f}")
+            output = deepfake_model(input_tensor)
+            pred = torch.argmax(output, dim=1).item()
+
+        st.write(f"Deepfake Prediction: **{'FAKE' if pred == 1 else 'REAL'}**")
 
     # ---------------- Video ----------------
     elif "video" in file_type:
@@ -84,23 +82,17 @@ if file:
             frame_pil = Image.fromarray(frame_rgb).convert("RGB")
             st.image(frame_pil, caption="First frame from video", use_column_width=True)
 
-            st.info("Using pre-trained placeholder deepfake detector (ResNet18) on first frame")
-
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225]),
             ])
+
             input_tensor = preprocess(frame_pil).unsqueeze(0)
 
-            model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-            model.eval()
-
             with torch.no_grad():
-                output = model(input_tensor)
-                prob = torch.softmax(output, dim=1)
-                top1_prob, top1_catid = torch.max(prob, dim=1)
-                st.write(f"Fake/Real Prediction (placeholder): **{'FAKE' if top1_catid.item()%2==0 else 'REAL'}** | Confidence: {top1_prob.item():.2f}")
+                output = deepfake_model(input_tensor)
+                pred = torch.argmax(output, dim=1).item()
+
+            st.write(f"Deepfake Prediction (first frame): **{'FAKE' if pred == 1 else 'REAL'}**")
 
         cap.release()
