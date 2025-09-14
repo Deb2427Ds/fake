@@ -15,18 +15,22 @@ st.title("📰 Fake News & 🖼 Deepfake Detection Demo")
 # ---------------------------
 st.header("1️⃣ Fake News Detection (Text)")
 
-# Load your trained Fake News model
+# Load your trained Fake News model + vectorizer
 @st.cache_resource
 def load_fake_news_model():
-    return joblib.load("fake_news_model.pkl")  # 👈 your trained model
+    model = joblib.load("fake_news_model.pkl")        # 👈 saved classifier
+    vectorizer = joblib.load("vectorizer.pkl")        # 👈 saved TF-IDF vectorizer
+    return model, vectorizer
 
-fake_news_model = load_fake_news_model()
+fake_news_model, vectorizer = load_fake_news_model()
 
 text_input = st.text_area("Enter text/article for classification:")
 
 if st.button("Check Text"):
     if text_input.strip() != "":
-        pred = fake_news_model.predict([text_input])[0]
+        # Vectorize input text
+        text_vectorized = vectorizer.transform([text_input])
+        pred = fake_news_model.predict(text_vectorized)[0]
         label = "FAKE" if pred == 0 else "REAL"
         st.write(f"Prediction: **{label}**")
     else:
