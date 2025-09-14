@@ -19,10 +19,19 @@ text_input = st.text_area("Enter text/article for classification:")
 
 if st.button("Check Text"):
     if text_input.strip() != "":
-        # Load pre-trained fake news model from HuggingFace
-        classifier = pipeline("text-classification", model="mrm8488/bert-tiny-finetuned-fake-news")
+        # Load a better pre-trained fake news model
+        classifier = pipeline("text-classification", model="roberta-base-finetuned-fake-news")
         result = classifier(text_input)[0]
-        st.write(f"Label: **{result['label']}** | Confidence: {result['score']:.2f}")
+
+        label = result['label']
+        score = result['score']
+
+        # Apply confidence threshold
+        threshold = 0.7
+        if score < threshold:
+            st.write(f"Prediction uncertain (score={score:.2f}), could be REAL or FAKE")
+        else:
+            st.write(f"Label: **{label}** | Confidence: {score:.2f}")
     else:
         st.warning("Please enter some text to classify.")
 
@@ -43,7 +52,6 @@ if file:
 
         st.info("Using pre-trained placeholder deepfake detector (ResNet18)")
 
-        # Preprocess
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
@@ -53,7 +61,6 @@ if file:
 
         input_tensor = preprocess(image).unsqueeze(0)
 
-        # Load ResNet18
         model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         model.eval()
 
@@ -61,7 +68,6 @@ if file:
             output = model(input_tensor)
             prob = torch.softmax(output, dim=1)
             top1_prob, top1_catid = torch.max(prob, dim=1)
-            # Placeholder: even/odd top1_catid -> FAKE/REAL
             st.write(f"Fake/Real Prediction (placeholder): **{'FAKE' if top1_catid.item()%2==0 else 'REAL'}** | Confidence: {top1_prob.item():.2f}")
 
     # ---------------- Video ----------------
@@ -74,14 +80,12 @@ if file:
 
         ret, frame = cap.read()
         if ret:
-            # Convert to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame_pil = Image.fromarray(frame_rgb).convert("RGB")
             st.image(frame_pil, caption="First frame from video", use_column_width=True)
 
             st.info("Using pre-trained placeholder deepfake detector (ResNet18) on first frame")
 
-            # Preprocess
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
@@ -90,7 +94,6 @@ if file:
             ])
             input_tensor = preprocess(frame_pil).unsqueeze(0)
 
-            # Load ResNet18
             model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
             model.eval()
 
